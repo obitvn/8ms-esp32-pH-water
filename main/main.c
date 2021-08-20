@@ -1,5 +1,5 @@
 /* LVGL Example project
- * 
+ *
  * Basic project to test LVGL on ESP32 based projects.
  *
  * This example code is in the Public Domain (or CC0 licensed, at your option.)
@@ -28,6 +28,15 @@
 #include "qm_ui_entry.h"
 #include "wtctrl.h"
 
+
+
+#include <mcp4725_t.h>
+
+#define ADDR MCP4725A0_I2C_ADDR0
+#define SDA_GPIO 18
+#define SCL_GPIO 19
+#define VDD 3.3
+
 /*********************
  *      DEFINES
  *********************/
@@ -39,7 +48,7 @@
  **********************/
 static void lv_tick_task(void *arg);
 void guiTask(void *pvParameter);
-
+void mcp4725_task(void *pvParameter);
 /**********************
  *   APPLICATION MAIN
  **********************/
@@ -59,7 +68,10 @@ static void user_nvs_init()
 void app_main()
 {
     user_nvs_init();
+    ESP_ERROR_CHECK(i2cdev_init());
     xTaskCreatePinnedToCore(guiTask, "gui", 4096 * 2, NULL, 0, NULL, 1);
+    vTaskDelay(2000);
+    xTaskCreate(mcp4725_task, "mcp4725", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL);
 
 #ifdef LV_8MS_UART_CTRL
     lv_8ms_uart_ctrl_init(UART_NUM_0);
@@ -128,9 +140,11 @@ void guiTask(void *pvParameter)
     lv_indev_drv_register(&indev_drv);
 #endif
 
-    const esp_timer_create_args_t periodic_timer_args = {
+    const esp_timer_create_args_t periodic_timer_args =
+    {
         .callback = &lv_tick_task,
-        .name = "periodic_gui"};
+        .name = "periodic_gui"
+    };
     esp_timer_handle_t periodic_timer;
     ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args, &periodic_timer));
     ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer, LV_TICK_PERIOD_MS * 1000));
@@ -152,4 +166,64 @@ void guiTask(void *pvParameter)
 
     //A task should NEVER return
     vTaskDelete(NULL);
+}
+
+
+static void mcp4725_wait_for_eeprom()
+{
+    bool busy;
+    while (true)
+    {
+        ESP_ERROR_CHECK(mcp4725_eeprom_busy( &busy));
+        if (!busy)
+            return;
+        printf("...DAC is busy, waiting...\n");
+        vTaskDelay(1);
+    }
+}
+
+float vout_read=0;
+void mcp4725_task(void *pvParameters)
+{
+
+    printf("mcp4725 task init\n");
+    // i2c_dev_t dev;
+    // memset(&dev, 0, sizeof(i2c_dev_t));
+
+    // Init device descriptor
+    //ESP_ERROR_CHECK(mcp4725_init_desc(&dev, 0, ADDR, SDA_GPIO, SCL_GPIO));
+
+    mcp4725_power_mode_t pm;
+    ESP_ERROR_CHECK(mcp4725_get_power_mode( true, &pm));
+    if (pm != MCP4725_PM_NORMAL)
+    {
+        printf("DAC was sleeping... Wake up Neo!\n");
+        ESP_ERROR_CHECK(mcp4725_set_power_mode( true, MCP4725_PM_NORMAL));
+        mcp4725_wait_for_eeprom();
+    }
+
+    printf("Set default DAC output value to MAX...\n");
+    ESP_ERROR_CHECK(mcp4725_set_raw_output( MCP4725_MAX_VALUE, true));
+    mcp4725_wait_for_eeprom();
+
+    printf("Now let's generate the sawtooth wave in slow manner\n");
+
+    float vout = 0;
+    while (1)
+    {
+        vout += 0.1;
+        if (vout > VDD) vout = 0;
+
+        printf("Vout: %.02f\n", vout);
+
+        ESP_ERROR_CHECK(mcp4725_set_voltage( VDD, vout, false));
+
+
+        // It will be very low freq wave
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        // ESP_ERROR_CHECK(mcp4725_get_voltage( VDD, false, &vout_read)); // get val sai, nhưng set val đúng
+        // printf("Vout read: %.02f\n", vout_read);
+
+    }
 }
