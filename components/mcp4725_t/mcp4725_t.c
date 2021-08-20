@@ -177,7 +177,7 @@ esp_err_t mcp4725_set_raw_output(uint16_t value, bool eeprom)
         value << 4
     };
 
-    printf("raw set val %d\r\n", value);
+    // printf("raw set val %d\r\n", value);
 
     ESP_LOGV(TAG, "Set output value to %u", value);
 
@@ -195,7 +195,7 @@ esp_err_t mcp4725_get_voltage( float vdd, bool eeprom, float *voltage)
 
     uint16_t value;
     CHECK(mcp4725_get_raw_output(eeprom, &value));
-    printf("raw get val %d\r\n", value);
+    // printf("raw get val %d\r\n", value);
 
     *voltage = vdd / MCP4725_MAX_VALUE * value;
 
