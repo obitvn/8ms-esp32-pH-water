@@ -46,16 +46,6 @@
 
 
 
-#define DEFAULT_VREF    1100        //Use adc2_vref_to_gpio() to obtain a better estimate
-#define NO_OF_SAMPLES   64          //Multisampling
-
-static esp_adc_cal_characteristics_t *adc_chars;
-
-static const adc_channel_t channel = ADC_CHANNEL_5;     //GPIO34 if ADC1, GPIO14 if ADC2
-static const adc_bits_width_t width = ADC_WIDTH_BIT_12;
-static const adc_atten_t atten = ADC_ATTEN_DB_0;
-static const adc_unit_t unit = ADC_UNIT_1;
-
 /**********************
  *  STATIC PROTOTYPES
  **********************/
@@ -84,7 +74,7 @@ void app_main()
     user_nvs_init();
     ESP_ERROR_CHECK(i2cdev_init());
     xTaskCreatePinnedToCore(guiTask, "gui", 4096 * 2, NULL, 0, NULL, 1);
-    vTaskDelay(2000);
+    vTaskDelay(500);
     xTaskCreate(adc_task, "adc", configMINIMAL_STACK_SIZE * 8, NULL, 4, NULL);
     xTaskCreate(mcp4725_task, "mcp4725", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL);
 
@@ -197,7 +187,7 @@ static void mcp4725_wait_for_eeprom()
     }
 }
 
-float vout_read=0;
+float vout_read = 0;
 void mcp4725_task(void *pvParameters)
 {
 
@@ -227,7 +217,7 @@ void mcp4725_task(void *pvParameters)
     while (1)
     {
         vout += 0.1;
-        if (vout > VDD) vout = 0;
+        if (vout > 1.400) vout = 0;
 
         printf("Vout: %.02f\n", vout);
 
@@ -235,7 +225,7 @@ void mcp4725_task(void *pvParameters)
 
 
         // It will be very low freq wave
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(2000));
 
         // ESP_ERROR_CHECK(mcp4725_get_voltage( VDD, false, &vout_read)); // get val sai, nhưng set val đúng
         // printf("Vout read: %.02f\n", vout_read);
@@ -243,18 +233,46 @@ void mcp4725_task(void *pvParameters)
     }
 }
 
+
+
+#define DEFAULT_VREF    1100        //Use adc2_vref_to_gpio() to obtain a better estimate
+#define NO_OF_SAMPLES   64          //Multisampling
+
+static esp_adc_cal_characteristics_t *adc_chars_pH_vref;
+static esp_adc_cal_characteristics_t *adc_chars_pH;
+static esp_adc_cal_characteristics_t *adc_chars_vref2048;
+
+static const adc_bits_width_t width = ADC_WIDTH_BIT_12;
+
+
+static const adc_channel_t adc_2048_channel = ADC_CHANNEL_7;     //GPIO34 if ADC1, GPIO14 if ADC2
+static const adc_atten_t adc_2048_atten = ADC_ATTEN_DB_11;
+
+static const adc_channel_t adc_pH_channel = ADC_CHANNEL_4;     //GPIO34 if ADC1, GPIO14 if ADC2
+static const adc_atten_t adc_pH_atten = ADC_ATTEN_DB_2_5;
+
+static const adc_channel_t adc_vref_pH_channel = ADC_CHANNEL_5;     //GPIO34 if ADC1, GPIO14 if ADC2
+static const adc_atten_t adc_vref_pH_atten = ADC_ATTEN_DB_6;
+
+
 static void check_efuse(void)
 {
     //Check if TP is burned into eFuse
-    if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_TP) == ESP_OK) {
+    if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_TP) == ESP_OK)
+    {
         printf("eFuse Two Point: Supported\n");
-    } else {
+    }
+    else
+    {
         printf("eFuse Two Point: NOT supported\n");
     }
     //Check Vref is burned into eFuse
-    if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_VREF) == ESP_OK) {
+    if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_VREF) == ESP_OK)
+    {
         printf("eFuse Vref: Supported\n");
-    } else {
+    }
+    else
+    {
         printf("eFuse Vref: NOT supported\n");
     }
 
@@ -262,50 +280,73 @@ static void check_efuse(void)
 
 static void print_char_val_type(esp_adc_cal_value_t val_type)
 {
-    if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP) {
+    if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP)
+    {
         printf("Characterized using Two Point Value\n");
-    } else if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
+    }
+    else if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF)
+    {
         printf("Characterized using eFuse Vref\n");
-    } else {
+    }
+    else
+    {
         printf("Characterized using Default Vref\n");
     }
 }
 
+uint32_t raw_ph, raw_2048, raw_vref;
 void adc_task(void *pvParameters)
 {
-        //Check if Two Point or Vref are burned into eFuse
+    //Check if Two Point or Vref are burned into eFuse
     check_efuse();
 
     //Configure ADC
-    if (unit == ADC_UNIT_1) {
-        adc1_config_width(width);
-        adc1_config_channel_atten(channel, atten);
-    } else {
-        adc2_config_channel_atten((adc2_channel_t)channel, atten);
-    }
+
+    adc1_config_width(width);
 
     //Characterize ADC
-    adc_chars = calloc(1, sizeof(esp_adc_cal_characteristics_t));
-    esp_adc_cal_value_t val_type = esp_adc_cal_characterize(unit, atten, width, DEFAULT_VREF, adc_chars);
-    print_char_val_type(val_type);
+    adc_chars_pH       = calloc(1, sizeof(esp_adc_cal_characteristics_t));
+    adc_chars_pH_vref  = calloc(1, sizeof(esp_adc_cal_characteristics_t));
+    adc_chars_vref2048 = calloc(1, sizeof(esp_adc_cal_characteristics_t));
+
+    esp_adc_cal_value_t val_type_pH = esp_adc_cal_characterize(ADC_UNIT_1, adc_pH_atten, width, DEFAULT_VREF, adc_chars_pH);
+    print_char_val_type(val_type_pH);
+
+    esp_adc_cal_value_t val_type_pH_vref = esp_adc_cal_characterize(ADC_UNIT_1, adc_vref_pH_atten, width, DEFAULT_VREF, adc_chars_pH_vref);
+    print_char_val_type(val_type_pH_vref);
+
+    esp_adc_cal_value_t val_type_vref2048 = esp_adc_cal_characterize(ADC_UNIT_1, adc_2048_atten, width, DEFAULT_VREF, adc_chars_vref2048);
+    print_char_val_type(val_type_vref2048);
 
     //Continuously sample ADC1
-    while (1) {
-        uint32_t adc_reading = 0;
-        //Multisampling
-        for (int i = 0; i < NO_OF_SAMPLES; i++) {
-            if (unit == ADC_UNIT_1) {
-                adc_reading += adc1_get_raw((adc1_channel_t)channel);
-            } else {
-                int raw;
-                adc2_get_raw((adc2_channel_t)channel, width, &raw);
-                adc_reading += raw;
-            }
-        }
-        adc_reading /= NO_OF_SAMPLES;
+    while (1)
+    {
+        // uint32_t adc_reading = 0;
+        // //Multisampling
+        // for (int i = 0; i < NO_OF_SAMPLES; i++)
+        // {
+        //     adc_reading += adc1_get_raw((adc1_channel_t)adc_pH_channel);
+        // }
+        // adc_reading /= NO_OF_SAMPLES;
+
         //Convert adc_reading to voltage in mV
-        uint32_t voltage = esp_adc_cal_raw_to_voltage(adc_reading, adc_chars);
-        printf("Raw: %d\tVoltage: %dmV\n", adc_reading, voltage);
+        adc1_config_channel_atten(adc_2048_channel, adc_2048_atten);
+        raw_2048 = adc1_get_raw((adc1_channel_t)adc_2048_channel);
+
+        adc1_config_channel_atten(adc_pH_channel, adc_pH_atten);
+        raw_ph   = adc1_get_raw((adc1_channel_t)adc_pH_channel);
+
+        adc1_config_channel_atten(adc_vref_pH_channel, adc_vref_pH_atten);
+        raw_vref = adc1_get_raw((adc1_channel_t)adc_vref_pH_channel);
+        
+        
+        
+        uint32_t pH_voltage = esp_adc_cal_raw_to_voltage(raw_ph, adc_chars_pH);
+        uint32_t vref2048_voltage = esp_adc_cal_raw_to_voltage(raw_2048, adc_chars_vref2048);
+        // printf("raw %d, vol:%d \r\n", raw_2048, vref2048_voltage);
+        uint32_t vrefpH_voltage = esp_adc_cal_raw_to_voltage(raw_vref, adc_chars_pH_vref);
+        printf("raw pH: %d, vref2048: %d, vrefpH: %d\n", raw_ph, raw_2048, raw_vref);
+        printf("pH: %dmV, vref2048: %dmV, vrefpH: %dmV\n", pH_voltage, vref2048_voltage, vrefpH_voltage);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
