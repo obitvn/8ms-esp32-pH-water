@@ -34,7 +34,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("D:/Project/esp32/8ms-esp32/build/bootloader/esp-idf/cmake_install.cmake")
+  include("D:/Project/esp32/8ms-esp32-pH-water/build/bootloader/esp-idf/cmake_install.cmake")
 
 endif()
 
@@ -46,5 +46,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "D:/Project/esp32/8ms-esp32/build/bootloader/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "D:/Project/esp32/8ms-esp32-pH-water/build/bootloader/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

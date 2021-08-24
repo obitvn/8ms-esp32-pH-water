@@ -1,8 +1,8 @@
 {
     "project_name":       "bootloader",
     "project_path":       "D:/Project/esp_idf/components/bootloader/subproject",
-    "build_dir":          "D:/Project/esp32/8ms-esp32/build/bootloader",
-    "config_file":        "D:/Project/esp32/8ms-esp32/sdkconfig",
+    "build_dir":          "D:/Project/esp32/8ms-esp32-pH-water/build/bootloader",
+    "config_file":        "D:/Project/esp32/8ms-esp32-pH-water/sdkconfig",
     "config_defaults":    "",
     "app_elf":            "bootloader.elf",
     "app_bin":            "bootloader.bin",

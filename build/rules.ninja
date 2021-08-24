@@ -2789,7 +2789,7 @@ rule C_STATIC_LIBRARY_LINKER____idf_main
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = C:\Users\chuti\.espressif\tools\cmake\3.16.4\bin\cmake.exe -SD:\Project\esp32\8ms-esp32 -BD:\Project\esp32\8ms-esp32\build
+  command = C:\Users\chuti\.espressif\tools\cmake\3.16.4\bin\cmake.exe -SD:\Project\esp32\8ms-esp32-pH-water -BD:\Project\esp32\8ms-esp32-pH-water\build
   description = Re-running CMake...
   generator = 1
 

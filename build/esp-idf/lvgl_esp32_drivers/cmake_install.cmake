@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp32/8ms-esp32/components/lvgl_esp32_drivers
+# Install script for directory: D:/Project/esp32/8ms-esp32-pH-water/components/lvgl_esp32_drivers
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

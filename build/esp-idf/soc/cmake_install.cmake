@@ -34,7 +34,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("D:/Project/esp32/8ms-esp32/build/esp-idf/soc/esp32/cmake_install.cmake")
+  include("D:/Project/esp32/8ms-esp32-pH-water/build/esp-idf/soc/esp32/cmake_install.cmake")
 
 endif()
 
