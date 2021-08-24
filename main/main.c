@@ -44,7 +44,7 @@
 #define TAG "main"
 #define LV_TICK_PERIOD_MS 10
 
-
+float pH_value=0;
 
 /**********************
  *  STATIC PROTOTYPES
@@ -214,8 +214,11 @@ void mcp4725_task(void *pvParameters)
     printf("Now let's generate the sawtooth wave in slow manner\n");
 
     float vout = 0;
+    pH_value = 2;
     while (1)
     {
+        pH_value += 0.1;
+        if(pH_value>13.9) pH_value =2;
         vout += 0.1;
         if (vout > 1.400) vout = 0;
 
