@@ -13,6 +13,9 @@
 #include "lv_8ms_blockly.h"
 #include "wtctrl.h"
 
+#include "driver/adc.h"
+#include "esp_adc_cal.h"
+
 typedef struct
 {
     char *name;
@@ -264,6 +267,117 @@ void calib_to_home_event_handler(lv_obj_t *event_kb, lv_event_t event)
 {
     show_screen_main_screen();
 }
+
+char buff_calib_text[15];
+uint32_t raw_adc_ph, adc_avg;
+float calib_val, calib_val_a, calib_val_b, calib_val_c;
+uint8_t point;
+
+void enable_calib_adc(uint8_t set_point)
+{
+    point = set_point;
+}
+
+static int i;
+
+void calib_pH(uint8_t set_point)
+{
+    point = 0;
+    switch (set_point)
+    {
+        case 1:
+            lv_label_set_text(pH_pos_a, "watting..");
+            break;   
+        case 2:
+            lv_label_set_text(pH_pos_b, "watting..");
+            break;
+        case 3:
+            lv_label_set_text(pH_pos_c, "watting..");
+            break;    
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));
+    memset(buff_calib_text, 0, 15);
+    adc1_config_channel_atten((adc1_channel_t)ADC_CHANNEL_4, ADC_ATTEN_DB_2_5);
+    for(i=0; i < 100; i++)
+    {
+        raw_adc_ph   = adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
+        adc_avg += raw_adc_ph;
+        printf("count: %d calib : %d\r\n", i, raw_adc_ph);
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    calib_val = (float)adc_avg/(float)1000;
+    sprintf(buff_calib_text,"%d", (uint32_t)calib_val);
+    printf("calib val: %f text:%s\r\n", calib_val, buff_calib_text);
+    switch (set_point)
+    {
+        case 1:
+            calib_val_a = calib_val;
+            lv_label_set_text(pH_pos_a, buff_calib_text);
+            break;   
+        case 2:
+            calib_val_b = calib_val;
+            lv_label_set_text(pH_pos_b, buff_calib_text);
+            break;
+        case 3:
+            calib_val_c = calib_val;
+            lv_label_set_text(pH_pos_c, buff_calib_text);
+            break;    
+    }
+
+}
+
+void start_calib_a_event_handler(lv_obj_t *event_kb, lv_event_t event)
+{
+
+    lv_label_set_text(pH_pos_a, "watting..");
+    for(int i=0; i<1000; i++)
+    {
+        raw_adc_ph   = adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
+        adc_avg += raw_adc_ph;
+        printf("count: %d calib 4.01: %d\r\n", i, raw_adc_ph);
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    calib_val_a = (float)adc_avg/(float)1000;
+    sprintf(buff_calib_text,"%d", (uint32_t)calib_val_a);
+    lv_label_set_text(pH_pos_a, buff_calib_text);
+    memset(buff_calib_text, 0, 15);
+    
+}
+
+void start_calib_b_event_handler(lv_obj_t *event_kb, lv_event_t event)
+{
+    lv_label_set_text(pH_pos_b, "watting..");
+    for(int i=0; i<1000; i++)
+    {
+        raw_adc_ph   = adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
+        adc_avg += raw_adc_ph;
+        printf("count: %d calib 6.86: %d\r\n", i, raw_adc_ph);
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    calib_val_b = (float)adc_avg/(float)1000;
+    sprintf(buff_calib_text,"%d", (uint32_t)calib_val_b);
+    lv_label_set_text(pH_pos_b, buff_calib_text);
+    memset(buff_calib_text, 0, 15);
+}
+
+void start_calib_c_event_handler(lv_obj_t *event_kb, lv_event_t event)
+{
+    lv_label_set_text(pH_pos_c, "watting..");
+    for(int i=0; i<1000; i++)
+    {
+        raw_adc_ph   = adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
+        adc_avg += raw_adc_ph;
+        printf("count: %d calib 9.18: %d\r\n", i, raw_adc_ph);
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    calib_val_a = (float)adc_avg/(float)1000;
+    sprintf(buff_calib_text,"%d", (uint32_t)calib_val_c);
+    lv_label_set_text(pH_pos_c, buff_calib_text);
+    memset(buff_calib_text, 0, 15);
+}
+
+
 ////////////////////////////////////////
 
 static void g_kb_event_cb(lv_obj_t *event_kb, lv_event_t event)
@@ -786,9 +900,9 @@ void lv_8ms_start_calib_b_create()
     lv_obj_set_click(start_calib_b, true);
     lv_obj_set_style_local_image_recolor(start_calib_b, LV_IMG_PART_MAIN, LV_STATE_PRESSED, LV_COLOR_BLACK);
     lv_obj_set_style_local_image_recolor_opa(start_calib_b, LV_IMG_PART_MAIN, LV_STATE_PRESSED, 60);
-#ifdef BLOCKLY_start_calib_b_EVENT_HANDLER
+// #ifdef BLOCKLY_start_calib_b_EVENT_HANDLER
     lv_obj_set_event_cb(start_calib_b, start_calib_b_event_handler);
-#endif
+// #endif
 }
 void lv_8ms_start_calib_a_create()
 {
@@ -798,9 +912,9 @@ void lv_8ms_start_calib_a_create()
     lv_obj_set_click(start_calib_a, true);
     lv_obj_set_style_local_image_recolor(start_calib_a, LV_IMG_PART_MAIN, LV_STATE_PRESSED, LV_COLOR_BLACK);
     lv_obj_set_style_local_image_recolor_opa(start_calib_a, LV_IMG_PART_MAIN, LV_STATE_PRESSED, 60);
-#ifdef BLOCKLY_start_calib_a_EVENT_HANDLER
+// #ifdef BLOCKLY_start_calib_a_EVENT_HANDLER
     lv_obj_set_event_cb(start_calib_a, start_calib_a_event_handler);
-#endif
+// #endif
 }
 void lv_8ms_start_calib_c_create()
 {
@@ -810,9 +924,9 @@ void lv_8ms_start_calib_c_create()
     lv_obj_set_click(start_calib_c, true);
     lv_obj_set_style_local_image_recolor(start_calib_c, LV_IMG_PART_MAIN, LV_STATE_PRESSED, LV_COLOR_BLACK);
     lv_obj_set_style_local_image_recolor_opa(start_calib_c, LV_IMG_PART_MAIN, LV_STATE_PRESSED, 60);
-#ifdef BLOCKLY_start_calib_c_EVENT_HANDLER
+// #ifdef BLOCKLY_start_calib_c_EVENT_HANDLER
     lv_obj_set_event_cb(start_calib_c, start_calib_c_event_handler);
-#endif
+// #endif
 }
 void lv_8ms_pH_pos_a_create()
 {
@@ -823,7 +937,7 @@ void lv_8ms_pH_pos_a_create()
     lv_obj_set_style_local_text_color(pH_pos_a, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_MAKE(0x0d, 0xa2, 0xdb));
     lv_obj_set_style_local_text_font(pH_pos_a, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &ali_font_58);
 
-    lv_label_set_text(pH_pos_a, "calib 4.00");
+    lv_label_set_text(pH_pos_a, "calib 4.01");
     lv_label_set_align(pH_pos_a, LV_LABEL_ALIGN_CENTER);
 #ifdef BLOCKLY_pH_pos_a_EVENT_HANDLER
     lv_obj_set_event_cb(pH_pos_a, pH_pos_a_event_handler);
@@ -852,7 +966,7 @@ void lv_8ms_pH_pos_b_create()
     lv_obj_set_style_local_text_color(pH_pos_b, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_MAKE(0x0d, 0xa2, 0xdb));
     lv_obj_set_style_local_text_font(pH_pos_b, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &ali_font_58);
 
-    lv_label_set_text(pH_pos_b, "calib 7.00");
+    lv_label_set_text(pH_pos_b, "calib 6.86");
     lv_label_set_align(pH_pos_b, LV_LABEL_ALIGN_CENTER);
 #ifdef BLOCKLY_pH_pos_b_EVENT_HANDLER
     lv_obj_set_event_cb(pH_pos_b, pH_pos_b_event_handler);
@@ -869,8 +983,8 @@ void lv_8ms_pH_pos_b_create()
         lv_obj_set_style_local_pad_bottom(pH_pos_b, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, y_offset);
         lv_obj_set_style_local_pad_top(pH_pos_b, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, y_offset);
     }
-    lv_obj_set_pos(pH_pos_b, 0, 110);
-
+    lv_obj_set_pos(pH_pos_b, 0, 110)
+;
 }
 void lv_8ms_pH_pos_c_create()
 {
@@ -946,9 +1060,13 @@ int _delay = 0;
 void lv_qm_ui_loop(void)
 {
 
-sprintf(ph_buf,"%0.2f", pH_value);
-lv_label_set_text(label_pH, ph_buf);
-
+    sprintf(ph_buf,"%0.2f", pH_value);
+    lv_label_set_text(label_pH, ph_buf);
+    if(point)
+    {
+        calib_pH(point);
+        point =0;
+    }
 
 
 

@@ -215,19 +215,21 @@ void mcp4725_task(void *pvParameters)
 
     float vout = 0;
     pH_value = 2;
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    mcp4725_set_voltage( VDD, 0.63, false);
     while (1)
-    {
-        pH_value += 0.1;
-        if(pH_value>13.9) pH_value =2;
-        vout += 0.1;
-        if (vout > 1.400) vout = 0;
+        {
+        // pH_value += 0.1;
+        // if(pH_value>13.9) pH_value =2;
+        // vout += 0.1;
+        // if (vout > 1.400) vout = 0;
 
-        printf("Vout: %.02f\n", vout);
+        // printf("Vout: %.02f\n", vout);
 
-        ESP_ERROR_CHECK(mcp4725_set_voltage( VDD, vout, false));
+        // ESP_ERROR_CHECK(mcp4725_set_voltage( VDD, vout, false));
 
 
-        // It will be very low freq wave
+        // //It will be very low freq wave
         vTaskDelay(pdMS_TO_TICKS(2000));
 
         // ESP_ERROR_CHECK(mcp4725_get_voltage( VDD, false, &vout_read)); // get val sai, nhưng set val đúng
@@ -324,23 +326,17 @@ void adc_task(void *pvParameters)
     //Continuously sample ADC1
     while (1)
     {
-        // uint32_t adc_reading = 0;
-        // //Multisampling
-        // for (int i = 0; i < NO_OF_SAMPLES; i++)
-        // {
-        //     adc_reading += adc1_get_raw((adc1_channel_t)adc_pH_channel);
-        // }
-        // adc_reading /= NO_OF_SAMPLES;
+
 
         //Convert adc_reading to voltage in mV
         adc1_config_channel_atten(adc_2048_channel, adc_2048_atten);
-        raw_2048 = adc1_get_raw((adc1_channel_t)adc_2048_channel);
+        //raw_2048 = adc1_get_raw((adc1_channel_t)adc_2048_channel);
 
         adc1_config_channel_atten(adc_pH_channel, adc_pH_atten);
-        raw_ph   = adc1_get_raw((adc1_channel_t)adc_pH_channel);
+        // raw_ph   = adc1_get_raw((adc1_channel_t)adc_pH_channel);
 
         adc1_config_channel_atten(adc_vref_pH_channel, adc_vref_pH_atten);
-        raw_vref = adc1_get_raw((adc1_channel_t)adc_vref_pH_channel);
+        // raw_vref = adc1_get_raw((adc1_channel_t)adc_vref_pH_channel);
         
         
         
