@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp_idf/components/esp_system/port
+# Install script for directory: E:/Project/esp-idf/components/esp_system/port
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -34,7 +34,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("D:/Project/esp32/8ms-esp32-pH-water/build/esp-idf/esp_system/port/soc/esp32/cmake_install.cmake")
+  include("E:/Project/esp32/8ms-esp32-pH-water/build/esp-idf/esp_system/port/soc/esp32/cmake_install.cmake")
 
 endif()
 

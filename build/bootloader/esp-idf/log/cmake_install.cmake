@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp_idf/components/log
+# Install script for directory: E:/Project/esp-idf/components/log
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

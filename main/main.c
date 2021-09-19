@@ -28,6 +28,7 @@
 #include "qm_ui_entry.h"
 #include "wtctrl.h"
 
+#include "driver/pcnt.h"
 
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
@@ -45,6 +46,111 @@
 #define LV_TICK_PERIOD_MS 10
 
 float pH_value=0;
+
+// 1 vòng cảm biến lưu lượng ra 3 xung
+
+#define PCNT_TEST_UNIT      PCNT_UNIT_0
+#define PCNT_H_LIM_VAL      4000000
+#define PCNT_L_LIM_VAL     -4000000
+#define PCNT_THRESH1_VAL    1
+#define PCNT_THRESH0_VAL   -1
+#define PCNT_INPUT_SIG_IO   26  // Pulse Input GPIO, 26 is FlowA, 25 is FlowB, DS18B20 in IO34
+#define PCNT_INPUT_CTRL_IO  0  // Control GPIO HIGH=count up, LOW=count down
+
+
+xQueueHandle pcnt_evt_queue;   // A queue to handle pulse counter events
+pcnt_isr_handle_t user_isr_handle = NULL; //user's ISR service handle
+
+/* A sample structure to pass events from the PCNT
+ * interrupt handler to the main program.
+ */
+typedef struct {
+    int32_t unit;  // the PCNT unit that originated an interrupt
+    uint32_t status; // information on the event type that caused the interrupt
+} pcnt_evt_t;
+
+/* Decode what PCNT's unit originated an interrupt
+ * and pass this information together with the event type
+ * the main program using a queue.
+ */
+static void IRAM_ATTR pcnt_example_intr_handler(void *arg)
+{
+    uint32_t intr_status = PCNT.int_st.val;
+    int i;
+    pcnt_evt_t evt;
+    portBASE_TYPE HPTaskAwoken = pdFALSE;
+
+    for (i = 0; i < PCNT_UNIT_MAX; i++) {
+        if (intr_status & (BIT(i))) {
+            evt.unit = i;
+            /* Save the PCNT event type that caused an interrupt
+               to pass it to the main program */
+            evt.status = PCNT.status_unit[i].val;
+            PCNT.int_clr.val = BIT(i);
+            xQueueSendFromISR(pcnt_evt_queue, &evt, &HPTaskAwoken);
+            if (HPTaskAwoken == pdTRUE) {
+                portYIELD_FROM_ISR();
+            }
+        }
+    }
+}
+
+
+
+/* Initialize PCNT functions:
+ *  - configure and initialize PCNT
+ *  - set up the input filter
+ *  - set up the counter events to watch
+ */
+static void pcnt_example_init(void)
+{
+    /* Prepare configuration for the PCNT unit */
+    pcnt_config_t pcnt_config = {
+        // Set PCNT input signal and control GPIOs
+        .pulse_gpio_num = PCNT_INPUT_SIG_IO,
+        .ctrl_gpio_num = PCNT_INPUT_CTRL_IO,
+        .channel = PCNT_CHANNEL_0,
+        .unit = PCNT_TEST_UNIT,
+        // What to do on the positive / negative edge of pulse input?
+        .pos_mode = PCNT_COUNT_INC,   // Count up on the positive edge
+        .neg_mode = PCNT_COUNT_DIS,   // Keep the counter value on the negative edge
+        // What to do when control input is low or high?
+        .lctrl_mode = PCNT_MODE_REVERSE, // Reverse counting direction if low
+        .hctrl_mode = PCNT_MODE_KEEP,    // Keep the primary counter mode if high
+        // Set the maximum and minimum limit values to watch
+        .counter_h_lim = PCNT_H_LIM_VAL,
+        .counter_l_lim = PCNT_L_LIM_VAL,
+    };
+    /* Initialize PCNT unit */
+    pcnt_unit_config(&pcnt_config);
+
+    /* Configure and enable the input filter */
+    pcnt_set_filter_value(PCNT_TEST_UNIT, 1);
+    pcnt_filter_enable(PCNT_TEST_UNIT);
+
+    /* Set threshold 0 and 1 values and enable events to watch */
+    pcnt_set_event_value(PCNT_TEST_UNIT, PCNT_EVT_THRES_1, PCNT_THRESH1_VAL);
+    pcnt_event_enable(PCNT_TEST_UNIT, PCNT_EVT_THRES_1);
+    pcnt_set_event_value(PCNT_TEST_UNIT, PCNT_EVT_THRES_0, PCNT_THRESH0_VAL);
+    pcnt_event_enable(PCNT_TEST_UNIT, PCNT_EVT_THRES_0);
+    /* Enable events on zero, maximum and minimum limit values */
+    pcnt_event_enable(PCNT_TEST_UNIT, PCNT_EVT_ZERO);
+    pcnt_event_enable(PCNT_TEST_UNIT, PCNT_EVT_H_LIM);
+    pcnt_event_enable(PCNT_TEST_UNIT, PCNT_EVT_L_LIM);
+
+    /* Initialize PCNT's counter */
+    pcnt_counter_pause(PCNT_TEST_UNIT);
+    pcnt_counter_clear(PCNT_TEST_UNIT);
+
+    /* Register ISR handler and enable interrupts for PCNT unit */
+    pcnt_isr_register(pcnt_example_intr_handler, NULL, 0, &user_isr_handle);
+    pcnt_intr_enable(PCNT_TEST_UNIT);
+
+    /* Everything is set up, now go to counting */
+    pcnt_counter_resume(PCNT_TEST_UNIT);
+}
+
+
 
 /**********************
  *  STATIC PROTOTYPES
@@ -71,6 +177,9 @@ static void user_nvs_init()
 
 void app_main()
 {
+    /* Initialize PCNT event queue and PCNT functions */
+    pcnt_evt_queue = xQueueCreate(10, sizeof(pcnt_evt_t));
+    pcnt_example_init();
     user_nvs_init();
     ESP_ERROR_CHECK(i2cdev_init());
     xTaskCreatePinnedToCore(guiTask, "gui", 4096 * 2, NULL, 0, NULL, 1);
@@ -188,10 +297,17 @@ static void mcp4725_wait_for_eeprom()
 }
 
 float vout_read = 0;
+int32_t count = 0;
+int32_t flow_count = 0;
 void mcp4725_task(void *pvParameters)
 {
 
     printf("mcp4725 task init\n");
+
+
+        
+    pcnt_evt_t evt;
+    portBASE_TYPE res;
     // i2c_dev_t dev;
     // memset(&dev, 0, sizeof(i2c_dev_t));
 
@@ -216,7 +332,7 @@ void mcp4725_task(void *pvParameters)
     float vout = 0;
     pH_value = 2;
     vTaskDelay(pdMS_TO_TICKS(2000));
-    mcp4725_set_voltage( VDD, 0.63, false);
+    mcp4725_set_voltage( VDD, 0.8, false);
     while (1)
         {
         // pH_value += 0.1;
@@ -230,7 +346,34 @@ void mcp4725_task(void *pvParameters)
 
 
         // //It will be very low freq wave
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        
+        vTaskDelay(pdMS_TO_TICKS(200));
+        res = xQueueReceive(pcnt_evt_queue, &evt, 100 / portTICK_PERIOD_MS);
+        if (res == pdTRUE) {
+            pcnt_get_counter_value(PCNT_TEST_UNIT, &count);
+            printf("Event PCNT unit[%d]; cnt: %d\n", evt.unit, count);
+            if (evt.status & PCNT_EVT_THRES_1) {
+                printf("THRES1 EVT\n");
+            }
+            if (evt.status & PCNT_EVT_THRES_0) {
+                printf("THRES0 EVT\n");
+            }
+            if (evt.status & PCNT_EVT_L_LIM) {
+                printf("L_LIM EVT\n");
+            }
+            if (evt.status & PCNT_EVT_H_LIM) {
+                printf("H_LIM EVT\n");
+            }
+            if (evt.status & PCNT_EVT_ZERO) {
+                printf("ZERO EVT\n");
+            }
+        } else {
+            pcnt_get_counter_value(PCNT_TEST_UNIT, &count);
+            flow_count += count;
+            printf("Current counter value :%d\n", flow_count);
+            pcnt_counter_clear(PCNT_TEST_UNIT);
+            count = 0;
+        }
 
         // ESP_ERROR_CHECK(mcp4725_get_voltage( VDD, false, &vout_read)); // get val sai, nhưng set val đúng
         // printf("Vout read: %.02f\n", vout_read);
@@ -250,14 +393,14 @@ static esp_adc_cal_characteristics_t *adc_chars_vref2048;
 static const adc_bits_width_t width = ADC_WIDTH_BIT_12;
 
 
-static const adc_channel_t adc_2048_channel = ADC_CHANNEL_7;     //GPIO34 if ADC1, GPIO14 if ADC2
-static const adc_atten_t adc_2048_atten = ADC_ATTEN_DB_11;
+// static const adc_channel_t adc_2048_channel = ADC_CHANNEL_7;     //GPIO34 if ADC1, GPIO14 if ADC2
+// static const adc_atten_t adc_2048_atten = ADC_ATTEN_DB_11;
 
 static const adc_channel_t adc_pH_channel = ADC_CHANNEL_4;     //GPIO34 if ADC1, GPIO14 if ADC2
-static const adc_atten_t adc_pH_atten = ADC_ATTEN_DB_2_5;
+static const adc_atten_t adc_pH_atten = ADC_ATTEN_DB_6;
 
-static const adc_channel_t adc_vref_pH_channel = ADC_CHANNEL_5;     //GPIO34 if ADC1, GPIO14 if ADC2
-static const adc_atten_t adc_vref_pH_atten = ADC_ATTEN_DB_6;
+// static const adc_channel_t adc_vref_pH_channel = ADC_CHANNEL_5;     //GPIO34 if ADC1, GPIO14 if ADC2
+// static const adc_atten_t adc_vref_pH_atten = ADC_ATTEN_DB_6;
 
 
 static void check_efuse(void)
@@ -299,10 +442,85 @@ static void print_char_val_type(esp_adc_cal_value_t val_type)
     }
 }
 
+#include "esp_system.h"
+#include "nvs_flash.h"
+#include "nvs.h"
 uint32_t raw_ph, raw_2048, raw_vref;
+extern float calib_val, calib_val_a, calib_val_b, calib_val_c;
 void adc_task(void *pvParameters)
 {
     //Check if Two Point or Vref are burned into eFuse
+
+    // Initialize NVS
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        // NVS partition was truncated and needs to be erased
+        // Retry nvs_flash_init
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK( err );
+
+    // Open
+    printf("\n");
+    printf("Opening Non-Volatile Storage (NVS) handle in main.c... \r\n");
+    nvs_handle_t my_handle;
+    err = nvs_open("storage", NVS_READWRITE, &my_handle);
+    if (err != ESP_OK)
+    {
+        printf("Error (%s) opening NVS handle!\n", esp_err_to_name(err));
+    }
+    else 
+    {
+        printf("Done\n");
+
+        // Read
+        printf("Reading calib pH_value from NVS ... ");
+        calib_val_a = 0;
+        calib_val_b = 0;
+        calib_val_c = 0;
+        uint32_t val = 0;
+        err = nvs_get_u32(my_handle, "test", &val);
+        printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$test = %d\n", val);
+        err = nvs_get_u32(my_handle, "pH_point1", &calib_val_a);
+        switch (err) {
+            case ESP_OK:
+                printf("Done\n");
+                printf("calib_val_a = %f\n", calib_val_a);
+                break;
+            case ESP_ERR_NVS_NOT_FOUND:
+                printf("The value is not initialized yet!\n");
+                break;
+            default :
+                printf("Error (%s) reading!\n", esp_err_to_name(err));
+        }
+        err = nvs_get_u32(my_handle, "pH_point2", &calib_val_b);
+        switch (err) {
+            case ESP_OK:
+                printf("Done\n");
+                printf("calib_val_b = %f\n", calib_val_b);
+                break;
+            case ESP_ERR_NVS_NOT_FOUND:
+                printf("The value is not initialized yet!\n");
+                break;
+            default :
+                printf("Error (%s) reading!\n", esp_err_to_name(err));
+        }
+        err = nvs_get_u32(my_handle, "pH_point3", &calib_val_c);
+        switch (err) {
+            case ESP_OK:
+                printf("Done\n");
+                printf("calib_val_c = %f\n", calib_val_c);
+                break;
+            case ESP_ERR_NVS_NOT_FOUND:
+                printf("The value is not initialized yet!\n");
+                break;
+            default :
+                printf("Error (%s) reading!\n", esp_err_to_name(err));
+        }
+        nvs_close(my_handle);
+    }
+
     check_efuse();
 
     //Configure ADC
@@ -311,17 +529,17 @@ void adc_task(void *pvParameters)
 
     //Characterize ADC
     adc_chars_pH       = calloc(1, sizeof(esp_adc_cal_characteristics_t));
-    adc_chars_pH_vref  = calloc(1, sizeof(esp_adc_cal_characteristics_t));
-    adc_chars_vref2048 = calloc(1, sizeof(esp_adc_cal_characteristics_t));
+    // adc_chars_pH_vref  = calloc(1, sizeof(esp_adc_cal_characteristics_t));
+    // adc_chars_vref2048 = calloc(1, sizeof(esp_adc_cal_characteristics_t));
 
     esp_adc_cal_value_t val_type_pH = esp_adc_cal_characterize(ADC_UNIT_1, adc_pH_atten, width, DEFAULT_VREF, adc_chars_pH);
     print_char_val_type(val_type_pH);
 
-    esp_adc_cal_value_t val_type_pH_vref = esp_adc_cal_characterize(ADC_UNIT_1, adc_vref_pH_atten, width, DEFAULT_VREF, adc_chars_pH_vref);
-    print_char_val_type(val_type_pH_vref);
+    // esp_adc_cal_value_t val_type_pH_vref = esp_adc_cal_characterize(ADC_UNIT_1, adc_vref_pH_atten, width, DEFAULT_VREF, adc_chars_pH_vref);
+    // print_char_val_type(val_type_pH_vref);
 
-    esp_adc_cal_value_t val_type_vref2048 = esp_adc_cal_characterize(ADC_UNIT_1, adc_2048_atten, width, DEFAULT_VREF, adc_chars_vref2048);
-    print_char_val_type(val_type_vref2048);
+    // esp_adc_cal_value_t val_type_vref2048 = esp_adc_cal_characterize(ADC_UNIT_1, adc_2048_atten, width, DEFAULT_VREF, adc_chars_vref2048);
+    // print_char_val_type(val_type_vref2048);
 
     //Continuously sample ADC1
     while (1)
@@ -329,23 +547,22 @@ void adc_task(void *pvParameters)
 
 
         //Convert adc_reading to voltage in mV
-        adc1_config_channel_atten(adc_2048_channel, adc_2048_atten);
-        //raw_2048 = adc1_get_raw((adc1_channel_t)adc_2048_channel);
+        // adc1_config_channel_atten(adc_2048_channel, adc_2048_atten);
+        // raw_2048 = adc1_get_raw((adc1_channel_t)adc_2048_channel);
 
         adc1_config_channel_atten(adc_pH_channel, adc_pH_atten);
-        // raw_ph   = adc1_get_raw((adc1_channel_t)adc_pH_channel);
+        raw_ph   = adc1_get_raw((adc1_channel_t)adc_pH_channel);
 
-        adc1_config_channel_atten(adc_vref_pH_channel, adc_vref_pH_atten);
+        // adc1_config_channel_atten(adc_vref_pH_channel, adc_vref_pH_atten);
         // raw_vref = adc1_get_raw((adc1_channel_t)adc_vref_pH_channel);
         
         
         
         uint32_t pH_voltage = esp_adc_cal_raw_to_voltage(raw_ph, adc_chars_pH);
-        uint32_t vref2048_voltage = esp_adc_cal_raw_to_voltage(raw_2048, adc_chars_vref2048);
-        // printf("raw %d, vol:%d \r\n", raw_2048, vref2048_voltage);
-        uint32_t vrefpH_voltage = esp_adc_cal_raw_to_voltage(raw_vref, adc_chars_pH_vref);
-        printf("raw pH: %d, vref2048: %d, vrefpH: %d\n", raw_ph, raw_2048, raw_vref);
-        printf("pH: %dmV, vref2048: %dmV, vrefpH: %dmV\n", pH_voltage, vref2048_voltage, vrefpH_voltage);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        // uint32_t vref2048_voltage = esp_adc_cal_raw_to_voltage(raw_2048, adc_chars_vref2048);
+        // // printf("raw %d, vol:%d \r\n", raw_2048, vref2048_voltage);
+        // uint32_t vrefpH_voltage = esp_adc_cal_raw_to_voltage(raw_vref, adc_chars_pH_vref);
+        printf("raw pH: %d pH: %dmV \r\n", raw_ph, pH_voltage);
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }

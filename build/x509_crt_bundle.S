@@ -1,4 +1,4 @@
-/* * Data converted from D:/Project/esp32/8ms-esp32-pH-water/build/esp-idf/mbedtls/x509_crt_bundle
+/* * Data converted from E:/Project/esp32/8ms-esp32-pH-water/build/esp-idf/mbedtls/x509_crt_bundle
  */
 .data
 .section .rodata.embedded

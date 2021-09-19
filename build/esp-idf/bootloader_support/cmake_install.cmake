@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp_idf/components/bootloader_support
+# Install script for directory: E:/Project/esp-idf/components/bootloader_support
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

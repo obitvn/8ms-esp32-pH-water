@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-list(APPEND "EXTRA_COMPONENT_DIRS" "./components/lvgl_esp32_drivers" "./components/mcp4725_t" "./components/lvgl_esp32_drivers/lvgl_touch" "./components/lvgl_esp32_drivers/lvgl_tft" "./components/wtctrl" "D:/Project/esp32/esp-idf-lib/components")
+list(APPEND "EXTRA_COMPONENT_DIRS" "./components/lvgl_esp32_drivers" "./components/mcp4725_t" "./components/lvgl_esp32_drivers/lvgl_touch" "./components/lvgl_esp32_drivers/lvgl_tft" "./components/wtctrl" "E:/Project/esp32/esp-idf-lib/components")
 
 if (NOT DEFINED PROJECT_NAME)
 	project(lvgl-demo)

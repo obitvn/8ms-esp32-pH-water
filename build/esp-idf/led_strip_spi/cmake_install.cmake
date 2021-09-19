@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp32/esp-idf-lib/components/led_strip_spi
+# Install script for directory: E:/Project/esp32/esp-idf-lib/components/led_strip_spi
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

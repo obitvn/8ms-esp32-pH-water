@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp32/esp-idf-lib/components/ads111x
+# Install script for directory: E:/Project/esp32/esp-idf-lib/components/ads111x
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp_idf/components/esp_adc_cal
+# Install script for directory: E:/Project/esp-idf/components/esp_adc_cal
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

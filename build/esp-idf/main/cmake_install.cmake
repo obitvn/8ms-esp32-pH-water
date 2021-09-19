@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp32/8ms-esp32-pH-water/main
+# Install script for directory: E:/Project/esp32/8ms-esp32-pH-water/main
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

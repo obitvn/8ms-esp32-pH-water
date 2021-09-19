@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp32/esp-idf-lib/components/hd44780
+# Install script for directory: E:/Project/esp32/esp-idf-lib/components/hd44780
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

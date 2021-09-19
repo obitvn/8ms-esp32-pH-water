@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp32/8ms-esp32-pH-water/components/blockly
+# Install script for directory: E:/Project/esp32/8ms-esp32-pH-water/components/blockly
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

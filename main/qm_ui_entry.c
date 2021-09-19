@@ -273,16 +273,70 @@ uint32_t raw_adc_ph, adc_avg;
 float calib_val, calib_val_a, calib_val_b, calib_val_c;
 uint8_t point;
 
+
 void enable_calib_adc(uint8_t set_point)
 {
     point = set_point;
 }
 
 static int i;
+#include "esp_system.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+char calib_name[32];
+
+void save_calib_flash (uint8_t set_point, float calib_val)
+{
+    // Initialize NVS
+    esp_err_t err = nvs_flash_init();
+    nvs_handle_t my_handle;
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        // NVS partition was truncated and needs to be erased
+        // Retry nvs_flash_init
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK( err );
+        // Open
+    printf("\n");
+    printf("Opening Non-Volatile Storage (NVS) handle in qmui... \r\n");
+    err = nvs_open("storage", NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) 
+    {
+        printf("Error (%s) opening NVS handle!\n", esp_err_to_name(err));
+    } 
+    else 
+    {
+        printf("Done\n");
+        memset(calib_name, 0, 32);
+        // Open
+        uint32_t val = 1231979;
+        err = nvs_set_u32(my_handle, "test", val);
+        err = nvs_commit(my_handle);
+        sprintf(calib_name, "pH_point%d", set_point);
+        err = nvs_set_u32(my_handle, calib_name, calib_val);
+        printf("Updating calib data %s with value %f \r\n", calib_name, calib_val);
+        printf((err != ESP_OK) ? "Failed!\n" : "Done\n");
+
+        // Commit written value.
+        // After setting any values, nvs_commit() must be called to ensure changes are written
+        // to flash storage. Implementations may write to storage at other times,
+        // but this is not guaranteed.
+        printf("Committing updates in NVS ... ");
+        err = nvs_commit(my_handle);
+        printf((err != ESP_OK) ? "Failed!\n" : "Done\n");
+        vTaskDelay(pdMS_TO_TICKS(500));
+        // Close
+        nvs_close(my_handle);    
+    }
+}
 
 void calib_pH(uint8_t set_point)
 {
     point = 0;
+    adc_avg = 0;
+    raw_adc_ph = 0;
+
     switch (set_point)
     {
         case 1:
@@ -295,20 +349,28 @@ void calib_pH(uint8_t set_point)
             lv_label_set_text(pH_pos_c, "watting..");
             break;    
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(1000));
     memset(buff_calib_text, 0, 15);
     adc1_config_channel_atten((adc1_channel_t)ADC_CHANNEL_4, ADC_ATTEN_DB_2_5);
-    for(i=0; i < 100; i++)
+    for(i=0; i < 1000; i++)
     {
-        raw_adc_ph   = adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
+        for(int a=0; a<100; a++)
+        {
+            raw_adc_ph   += adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
+        }
+
+        raw_adc_ph = (float)raw_adc_ph/(float)100;
+        
         adc_avg += raw_adc_ph;
-        printf("count: %d calib : %d\r\n", i, raw_adc_ph);
+        printf("count: %d adc raw : %d adc avg: %d\r\n", i, raw_adc_ph, adc_avg);
+        raw_adc_ph = 0;
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 
     calib_val = (float)adc_avg/(float)1000;
     sprintf(buff_calib_text,"%d", (uint32_t)calib_val);
     printf("calib val: %f text:%s\r\n", calib_val, buff_calib_text);
+    save_calib_flash (set_point, calib_val);
     switch (set_point)
     {
         case 1:
@@ -329,52 +391,17 @@ void calib_pH(uint8_t set_point)
 
 void start_calib_a_event_handler(lv_obj_t *event_kb, lv_event_t event)
 {
-
-    lv_label_set_text(pH_pos_a, "watting..");
-    for(int i=0; i<1000; i++)
-    {
-        raw_adc_ph   = adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
-        adc_avg += raw_adc_ph;
-        printf("count: %d calib 4.01: %d\r\n", i, raw_adc_ph);
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    calib_val_a = (float)adc_avg/(float)1000;
-    sprintf(buff_calib_text,"%d", (uint32_t)calib_val_a);
-    lv_label_set_text(pH_pos_a, buff_calib_text);
-    memset(buff_calib_text, 0, 15);
-    
+    enable_calib_adc(1);   
 }
 
 void start_calib_b_event_handler(lv_obj_t *event_kb, lv_event_t event)
 {
-    lv_label_set_text(pH_pos_b, "watting..");
-    for(int i=0; i<1000; i++)
-    {
-        raw_adc_ph   = adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
-        adc_avg += raw_adc_ph;
-        printf("count: %d calib 6.86: %d\r\n", i, raw_adc_ph);
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    calib_val_b = (float)adc_avg/(float)1000;
-    sprintf(buff_calib_text,"%d", (uint32_t)calib_val_b);
-    lv_label_set_text(pH_pos_b, buff_calib_text);
-    memset(buff_calib_text, 0, 15);
+    enable_calib_adc(2);   
 }
 
 void start_calib_c_event_handler(lv_obj_t *event_kb, lv_event_t event)
 {
-    lv_label_set_text(pH_pos_c, "watting..");
-    for(int i=0; i<1000; i++)
-    {
-        raw_adc_ph   = adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
-        adc_avg += raw_adc_ph;
-        printf("count: %d calib 9.18: %d\r\n", i, raw_adc_ph);
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    calib_val_a = (float)adc_avg/(float)1000;
-    sprintf(buff_calib_text,"%d", (uint32_t)calib_val_c);
-    lv_label_set_text(pH_pos_c, buff_calib_text);
-    memset(buff_calib_text, 0, 15);
+    enable_calib_adc(3);   
 }
 
 
@@ -1053,21 +1080,24 @@ void show_screen_calib_screen()
 
 }
 
+extern int32_t flow_count;
 extern float pH_value;
-char ph_buf[10];
+char ph_buf[10], flow_buf[32];
 int screen_loop_enter = 0;
 int _delay = 0;
 void lv_qm_ui_loop(void)
 {
 
     sprintf(ph_buf,"%0.2f", pH_value);
+    sprintf(flow_buf,"%d", flow_count);
     lv_label_set_text(label_pH, ph_buf);
+    lv_label_set_text(label_flow_water, flow_buf);
     if(point)
     {
         calib_pH(point);
         point =0;
     }
-
+    
 
 
 

@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp_idf/components/ulp
+# Install script for directory: E:/Project/esp-idf/components/ulp
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

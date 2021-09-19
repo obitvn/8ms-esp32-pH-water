@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp32/8ms-esp32-pH-water/components/lvgl
+# Install script for directory: E:/Project/esp32/8ms-esp32-pH-water/components/lvgl
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

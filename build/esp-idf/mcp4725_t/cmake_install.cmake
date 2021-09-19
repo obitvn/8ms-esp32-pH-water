@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp32/8ms-esp32-pH-water/components/mcp4725_t
+# Install script for directory: E:/Project/esp32/8ms-esp32-pH-water/components/mcp4725_t
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

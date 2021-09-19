@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp_idf/components/protocomm
+# Install script for directory: E:/Project/esp-idf/components/protocomm
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

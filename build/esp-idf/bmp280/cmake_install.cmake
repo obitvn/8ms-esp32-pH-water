@@ -1,4 +1,4 @@
-# Install script for directory: D:/Project/esp32/esp-idf-lib/components/bmp280
+# Install script for directory: E:/Project/esp32/esp-idf-lib/components/bmp280
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
