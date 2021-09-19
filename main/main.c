@@ -159,6 +159,7 @@ static void lv_tick_task(void *arg);
 void guiTask(void *pvParameter);
 void mcp4725_task(void *pvParameter);
 void adc_task(void *pvParameter);
+extern void adc_calib_task(void *pvParameter);
 /**********************
  *   APPLICATION MAIN
  **********************/
@@ -186,6 +187,7 @@ void app_main()
     vTaskDelay(500);
     xTaskCreate(adc_task, "adc", configMINIMAL_STACK_SIZE * 8, NULL, 4, NULL);
     xTaskCreate(mcp4725_task, "mcp4725", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL);
+    xTaskCreate(adc_calib_task, "adc calib", configMINIMAL_STACK_SIZE * 16, NULL, 8, NULL);
 
 #ifdef LV_8MS_UART_CTRL
     lv_8ms_uart_ctrl_init(UART_NUM_0);

@@ -283,7 +283,7 @@ static int i;
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "nvs.h"
-char calib_name[32];
+
 
 void save_calib_flash (uint8_t set_point, float calib_val)
 {
@@ -308,14 +308,26 @@ void save_calib_flash (uint8_t set_point, float calib_val)
     else 
     {
         printf("Done\n");
-        memset(calib_name, 0, 32);
+
         // Open
-        uint32_t val = 1231979;
+        float val = 9231779;
         err = nvs_set_u32(my_handle, "test", val);
         err = nvs_commit(my_handle);
-        sprintf(calib_name, "pH_point%d", set_point);
-        err = nvs_set_u32(my_handle, calib_name, calib_val);
-        printf("Updating calib data %s with value %f \r\n", calib_name, calib_val);
+        switch(set_point)
+        {
+            case 1:
+                err = nvs_set_u32(my_handle, "pH_point1", (uint32_t)calib_val);
+                break;
+            case 2:
+                err = nvs_set_u32(my_handle, "pH_point2", (uint32_t)calib_val);
+                break;
+            case 3:
+                err = nvs_set_u32(my_handle, "pH_point3", (uint32_t)calib_val);
+                break;
+        }
+
+        
+        printf("Updating calib data %d with value %f \r\n", set_point, calib_val);
         printf((err != ESP_OK) ? "Failed!\n" : "Done\n");
 
         // Commit written value.
@@ -331,11 +343,15 @@ void save_calib_flash (uint8_t set_point, float calib_val)
     }
 }
 
+
+char display_process[20];
+
 void calib_pH(uint8_t set_point)
 {
     point = 0;
     adc_avg = 0;
     raw_adc_ph = 0;
+
 
     switch (set_point)
     {
@@ -352,11 +368,30 @@ void calib_pH(uint8_t set_point)
     vTaskDelay(pdMS_TO_TICKS(1000));
     memset(buff_calib_text, 0, 15);
     adc1_config_channel_atten((adc1_channel_t)ADC_CHANNEL_4, ADC_ATTEN_DB_2_5);
+
     for(i=0; i < 1000; i++)
     {
         for(int a=0; a<100; a++)
         {
             raw_adc_ph   += adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
+        }
+
+        if(i%10 == 0)
+        {
+            memset(display_process, 0, 20);
+            sprintf(display_process,"%d%c", i/10, '%');
+            switch (set_point)
+            {
+                case 1:
+                    lv_label_set_text(pH_pos_a, display_process);
+                    break;   
+                case 2:
+                    lv_label_set_text(pH_pos_b, display_process);
+                    break;
+                case 3:
+                    lv_label_set_text(pH_pos_c, display_process);
+                    break;    
+            }
         }
 
         raw_adc_ph = (float)raw_adc_ph/(float)100;
@@ -1046,7 +1081,7 @@ void lv_8ms_calib_to_home_create()
 {
     calib_to_home = lv_img_create(calib_screen, NULL);
     lv_img_set_src(calib_to_home, &img1627285431674_png);
-    lv_obj_set_pos(calib_to_home, 392, 209);
+    lv_obj_set_pos(calib_to_home, 392, 117);
     lv_obj_set_click(calib_to_home, true);
     lv_obj_set_style_local_image_recolor(calib_to_home, LV_IMG_PART_MAIN, LV_STATE_PRESSED, LV_COLOR_BLACK);
     lv_obj_set_style_local_image_recolor_opa(calib_to_home, LV_IMG_PART_MAIN, LV_STATE_PRESSED, 60);
@@ -1085,6 +1120,25 @@ extern float pH_value;
 char ph_buf[10], flow_buf[32];
 int screen_loop_enter = 0;
 int _delay = 0;
+TaskHandle_t adc_calib_task_handle = NULL;
+
+void adc_calib_task(void *pvParameter)
+{
+    point = 0;
+    while(1)
+    {
+        if(point)
+        {
+            calib_pH(point);
+            point = 0;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    //A task should NEVER return
+    vTaskDelete(NULL);
+}
+
 void lv_qm_ui_loop(void)
 {
 
@@ -1092,19 +1146,8 @@ void lv_qm_ui_loop(void)
     sprintf(flow_buf,"%d", flow_count);
     lv_label_set_text(label_pH, ph_buf);
     lv_label_set_text(label_flow_water, flow_buf);
-    if(point)
-    {
-        calib_pH(point);
-        point =0;
-    }
+
     
-
-
-
-
-
-
-
 
 #ifdef BLOCKLY_loop
     blockly_loop();
@@ -1167,6 +1210,7 @@ void lv_qm_ui_entry(void)
     lv_obj_add_style(calib_screen, LV_CONT_PART_MAIN, &style_main_calib_screen);
     lv_scr_load(main_screen);
     init_function();
+
 }
 /**
 * @brief blockly initialization
