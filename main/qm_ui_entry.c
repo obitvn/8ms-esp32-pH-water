@@ -235,6 +235,31 @@ void show_screen_calib_screen();
 */
 lv_obj_t *g_kb = NULL;
 
+uint8_t check_screen=0;
+uint8_t point=0;
+
+TaskHandle_t adc_calib_task_handle = NULL;
+void calib_pH(uint8_t set_point);
+
+
+void adc_calib_task(void *pvParameter)
+{
+    point = 0;
+    while(1)
+    {
+        if(point&&check_screen)
+        {
+            calib_pH(point);
+            point = 0;
+        }
+        vTaskDelay(pdMS_TO_TICKS(500));
+        // vTaskSuspend(adc_calib_task_handle);
+    }
+
+    //A task should NEVER return
+
+}
+
 /////////////////////////////////////////
 void setting_button_event_handler(lv_obj_t *event_kb, lv_event_t event)
 {
@@ -260,18 +285,22 @@ void home_button_event_handler(lv_obj_t *event_kb, lv_event_t event)
 
 void calib_button_event_handler(lv_obj_t *event_kb, lv_event_t event)
 {
+    check_screen=1;
     show_screen_calib_screen();
 }
 
 void calib_to_home_event_handler(lv_obj_t *event_kb, lv_event_t event)
 {
+    check_screen=0;
+    point=0;
+    // vTaskResume(adc_calib_task_handle);
     show_screen_main_screen();
 }
 
 char buff_calib_text[15];
 uint32_t raw_adc_ph, adc_avg;
 float calib_val, calib_val_a, calib_val_b, calib_val_c;
-uint8_t point;
+
 
 
 void enable_calib_adc(uint8_t set_point)
@@ -284,9 +313,28 @@ static int i;
 #include "nvs_flash.h"
 #include "nvs.h"
 
+union uconv
+{
+    float num32;
+
+    struct
+    {
+        uint8_t a;
+        uint8_t b;
+        uint8_t c;
+        uint8_t d;
+
+    } bytes;
+
+};
+
 
 void save_calib_flash (uint8_t set_point, float calib_val)
 {
+    union uconv ph_data;
+    uint8_t data_save[4];
+
+    ph_data.num32 = calib_val;
     // Initialize NVS
     esp_err_t err = nvs_flash_init();
     nvs_handle_t my_handle;
@@ -313,21 +361,31 @@ void save_calib_flash (uint8_t set_point, float calib_val)
         float val = 9231779;
         err = nvs_set_u32(my_handle, "test", val);
         err = nvs_commit(my_handle);
+        err = ESP_OK;
+
         switch(set_point)
         {
             case 1:
-                err = nvs_set_u32(my_handle, "pH_point1", (uint32_t)calib_val);
+                err = nvs_set_u8(my_handle, "pH_point1a", ph_data.bytes.a);
+                err = nvs_set_u8(my_handle, "pH_point1b", ph_data.bytes.b);
+                err = nvs_set_u8(my_handle, "pH_point1c", ph_data.bytes.c);
+                err = nvs_set_u8(my_handle, "pH_point1d", ph_data.bytes.d);
                 break;
             case 2:
-                err = nvs_set_u32(my_handle, "pH_point2", (uint32_t)calib_val);
+                err = nvs_set_u8(my_handle, "pH_point2a", ph_data.bytes.a);
+                err = nvs_set_u8(my_handle, "pH_point2b", ph_data.bytes.b);
+                err = nvs_set_u8(my_handle, "pH_point2c", ph_data.bytes.c);
+                err = nvs_set_u8(my_handle, "pH_point2d", ph_data.bytes.d);
                 break;
             case 3:
-                err = nvs_set_u32(my_handle, "pH_point3", (uint32_t)calib_val);
+                err = nvs_set_u8(my_handle, "pH_point3a", ph_data.bytes.a);
+                err = nvs_set_u8(my_handle, "pH_point3b", ph_data.bytes.b);
+                err = nvs_set_u8(my_handle, "pH_point3c", ph_data.bytes.c);
+                err = nvs_set_u8(my_handle, "pH_point3d", ph_data.bytes.d);
                 break;
         }
 
-        
-        printf("Updating calib data %d with value %f \r\n", set_point, calib_val);
+        printf("Updating calib data %d with value %f\r\n", set_point, calib_val);
         printf((err != ESP_OK) ? "Failed!\n" : "Done\n");
 
         // Commit written value.
@@ -351,7 +409,7 @@ void calib_pH(uint8_t set_point)
     point = 0;
     adc_avg = 0;
     raw_adc_ph = 0;
-
+    calib_val = 0;
 
     switch (set_point)
     {
@@ -371,9 +429,10 @@ void calib_pH(uint8_t set_point)
 
     for(i=0; i < 1000; i++)
     {
-        for(int a=0; a<100; a++)
+        for(int a=0; a<500; a++)
         {
             raw_adc_ph   += adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
+            for(int q=0; q<500; q++){};
         }
 
         if(i%10 == 0)
@@ -394,7 +453,7 @@ void calib_pH(uint8_t set_point)
             }
         }
 
-        raw_adc_ph = (float)raw_adc_ph/(float)100;
+        raw_adc_ph = (float)raw_adc_ph/(float)500;
         
         adc_avg += raw_adc_ph;
         printf("count: %d adc raw : %d adc avg: %d\r\n", i, raw_adc_ph, adc_avg);
@@ -1120,24 +1179,7 @@ extern float pH_value;
 char ph_buf[10], flow_buf[32];
 int screen_loop_enter = 0;
 int _delay = 0;
-TaskHandle_t adc_calib_task_handle = NULL;
 
-void adc_calib_task(void *pvParameter)
-{
-    point = 0;
-    while(1)
-    {
-        if(point)
-        {
-            calib_pH(point);
-            point = 0;
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-
-    //A task should NEVER return
-    vTaskDelete(NULL);
-}
 
 void lv_qm_ui_loop(void)
 {

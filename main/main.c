@@ -185,8 +185,8 @@ void app_main()
     ESP_ERROR_CHECK(i2cdev_init());
     xTaskCreatePinnedToCore(guiTask, "gui", 4096 * 2, NULL, 0, NULL, 1);
     vTaskDelay(500);
-    xTaskCreate(adc_task, "adc", configMINIMAL_STACK_SIZE * 8, NULL, 4, NULL);
-    xTaskCreate(mcp4725_task, "mcp4725", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL);
+    xTaskCreate(adc_task, "adc", configMINIMAL_STACK_SIZE * 8, NULL, 6, NULL);
+    xTaskCreate(mcp4725_task, "mcp4725", configMINIMAL_STACK_SIZE * 8, NULL, 7, NULL);
     xTaskCreate(adc_calib_task, "adc calib", configMINIMAL_STACK_SIZE * 16, NULL, 8, NULL);
 
 #ifdef LV_8MS_UART_CTRL
@@ -332,7 +332,7 @@ void mcp4725_task(void *pvParameters)
     printf("Now let's generate the sawtooth wave in slow manner\n");
 
     float vout = 0;
-    pH_value = 2;
+    // pH_value = 2;
     vTaskDelay(pdMS_TO_TICKS(2000));
     mcp4725_set_voltage( VDD, 0.8, false);
     while (1)
@@ -399,7 +399,7 @@ static const adc_bits_width_t width = ADC_WIDTH_BIT_12;
 // static const adc_atten_t adc_2048_atten = ADC_ATTEN_DB_11;
 
 static const adc_channel_t adc_pH_channel = ADC_CHANNEL_4;     //GPIO34 if ADC1, GPIO14 if ADC2
-static const adc_atten_t adc_pH_atten = ADC_ATTEN_DB_6;
+static const adc_atten_t adc_pH_atten = ADC_ATTEN_DB_2_5;
 
 // static const adc_channel_t adc_vref_pH_channel = ADC_CHANNEL_5;     //GPIO34 if ADC1, GPIO14 if ADC2
 // static const adc_atten_t adc_vref_pH_atten = ADC_ATTEN_DB_6;
@@ -449,10 +449,44 @@ static void print_char_val_type(esp_adc_cal_value_t val_type)
 #include "nvs.h"
 uint32_t raw_ph, raw_2048, raw_vref;
 extern float calib_val, calib_val_a, calib_val_b, calib_val_c;
+
+
+union uconverter
+{
+    float num32;
+
+    struct
+    {
+        uint8_t a;
+        uint8_t b;
+        uint8_t c;
+        uint8_t d;
+
+    } bytes;
+
+};
+
+uint32_t main_raw_adc_ph, avg_main_ph;
+
+float get_pH_value(float pointa, float pointc, int adc_val_now)
+{
+    //pH_val = a*adc_val + b
+    static float a,b,ph_val;
+    a = b= ph_val = 0;
+    b = (9.18-((4.01*pointc)/pointa))/(1-(pointc/pointa));
+    a = (4.01-b)/pointa;
+    printf("a=%f, b=%f", a, b);
+    ph_val = a*(float)adc_val_now +b;
+    return ph_val;
+
+}
+
+extern uint8_t check_screen;
+
 void adc_task(void *pvParameters)
 {
     //Check if Two Point or Vref are burned into eFuse
-
+    union uconverter read_ph_data;
     // Initialize NVS
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -482,12 +516,19 @@ void adc_task(void *pvParameters)
         calib_val_b = 0;
         calib_val_c = 0;
         uint32_t val = 0;
+         float abn;
         err = nvs_get_u32(my_handle, "test", &val);
         printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$test = %d\n", val);
-        err = nvs_get_u32(my_handle, "pH_point1", &calib_val_a);
+        
+        read_ph_data.num32 = 0;
+        err = nvs_get_u8(my_handle, "pH_point1a", &read_ph_data.bytes.a);
+        err = nvs_get_u8(my_handle, "pH_point1b", &read_ph_data.bytes.b);
+        err = nvs_get_u8(my_handle, "pH_point1c", &read_ph_data.bytes.c);
+        err = nvs_get_u8(my_handle, "pH_point1d", &read_ph_data.bytes.d);
         switch (err) {
             case ESP_OK:
                 printf("Done\n");
+                calib_val_a = read_ph_data.num32;
                 printf("calib_val_a = %f\n", calib_val_a);
                 break;
             case ESP_ERR_NVS_NOT_FOUND:
@@ -496,10 +537,17 @@ void adc_task(void *pvParameters)
             default :
                 printf("Error (%s) reading!\n", esp_err_to_name(err));
         }
-        err = nvs_get_u32(my_handle, "pH_point2", &calib_val_b);
+
+
+        read_ph_data.num32 = 0;
+        err = nvs_get_u8(my_handle, "pH_point2a", &read_ph_data.bytes.a);
+        err = nvs_get_u8(my_handle, "pH_point2b", &read_ph_data.bytes.b);
+        err = nvs_get_u8(my_handle, "pH_point2c", &read_ph_data.bytes.c);
+        err = nvs_get_u8(my_handle, "pH_point2d", &read_ph_data.bytes.d);
         switch (err) {
             case ESP_OK:
                 printf("Done\n");
+                calib_val_b = read_ph_data.num32;
                 printf("calib_val_b = %f\n", calib_val_b);
                 break;
             case ESP_ERR_NVS_NOT_FOUND:
@@ -508,10 +556,16 @@ void adc_task(void *pvParameters)
             default :
                 printf("Error (%s) reading!\n", esp_err_to_name(err));
         }
-        err = nvs_get_u32(my_handle, "pH_point3", &calib_val_c);
+
+        read_ph_data.num32 = 0;
+        err = nvs_get_u8(my_handle, "pH_point3a", &read_ph_data.bytes.a);
+        err = nvs_get_u8(my_handle, "pH_point3b", &read_ph_data.bytes.b);
+        err = nvs_get_u8(my_handle, "pH_point3c", &read_ph_data.bytes.c);
+        err = nvs_get_u8(my_handle, "pH_point3d", &read_ph_data.bytes.d);
         switch (err) {
             case ESP_OK:
                 printf("Done\n");
+                calib_val_c = read_ph_data.num32;
                 printf("calib_val_c = %f\n", calib_val_c);
                 break;
             case ESP_ERR_NVS_NOT_FOUND:
@@ -536,7 +590,7 @@ void adc_task(void *pvParameters)
 
     esp_adc_cal_value_t val_type_pH = esp_adc_cal_characterize(ADC_UNIT_1, adc_pH_atten, width, DEFAULT_VREF, adc_chars_pH);
     print_char_val_type(val_type_pH);
-
+    adc1_config_channel_atten(adc_pH_channel, adc_pH_atten);
     // esp_adc_cal_value_t val_type_pH_vref = esp_adc_cal_characterize(ADC_UNIT_1, adc_vref_pH_atten, width, DEFAULT_VREF, adc_chars_pH_vref);
     // print_char_val_type(val_type_pH_vref);
 
@@ -548,23 +602,25 @@ void adc_task(void *pvParameters)
     {
 
 
-        //Convert adc_reading to voltage in mV
-        // adc1_config_channel_atten(adc_2048_channel, adc_2048_atten);
-        // raw_2048 = adc1_get_raw((adc1_channel_t)adc_2048_channel);
+        if(!check_screen)
+        {
+            avg_main_ph = 0;
+            main_raw_adc_ph =0;
+            
 
-        adc1_config_channel_atten(adc_pH_channel, adc_pH_atten);
-        raw_ph   = adc1_get_raw((adc1_channel_t)adc_pH_channel);
+            for(int i=0; i < 200; i++)
+            {
+                main_raw_adc_ph   += adc1_get_raw((adc1_channel_t)ADC_CHANNEL_4);
+                for(int q=0; q<10000; q++){};
+            }
 
-        // adc1_config_channel_atten(adc_vref_pH_channel, adc_vref_pH_atten);
-        // raw_vref = adc1_get_raw((adc1_channel_t)adc_vref_pH_channel);
-        
-        
-        
-        uint32_t pH_voltage = esp_adc_cal_raw_to_voltage(raw_ph, adc_chars_pH);
-        // uint32_t vref2048_voltage = esp_adc_cal_raw_to_voltage(raw_2048, adc_chars_vref2048);
-        // // printf("raw %d, vol:%d \r\n", raw_2048, vref2048_voltage);
-        // uint32_t vrefpH_voltage = esp_adc_cal_raw_to_voltage(raw_vref, adc_chars_pH_vref);
-        printf("raw pH: %d pH: %dmV \r\n", raw_ph, pH_voltage);
-        vTaskDelay(pdMS_TO_TICKS(100));
+            avg_main_ph = (float)main_raw_adc_ph/(float)200;
+
+
+            pH_value = get_pH_value(calib_val_a, calib_val_c, avg_main_ph);
+            printf("raw pH: %d pH_value:%f\r\n", avg_main_ph, pH_value);
+        }
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
+
