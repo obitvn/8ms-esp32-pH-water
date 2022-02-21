@@ -310,11 +310,6 @@ void mcp4725_task(void *pvParameters)
         
     pcnt_evt_t evt;
     portBASE_TYPE res;
-    // i2c_dev_t dev;
-    // memset(&dev, 0, sizeof(i2c_dev_t));
-
-    // Init device descriptor
-    //ESP_ERROR_CHECK(mcp4725_init_desc(&dev, 0, ADDR, SDA_GPIO, SCL_GPIO));
 
     mcp4725_power_mode_t pm;
     ESP_ERROR_CHECK(mcp4725_get_power_mode( true, &pm));
@@ -337,17 +332,6 @@ void mcp4725_task(void *pvParameters)
     mcp4725_set_voltage( VDD, 0.8, false);
     while (1)
         {
-        // pH_value += 0.1;
-        // if(pH_value>13.9) pH_value =2;
-        // vout += 0.1;
-        // if (vout > 1.400) vout = 0;
-
-        // printf("Vout: %.02f\n", vout);
-
-        // ESP_ERROR_CHECK(mcp4725_set_voltage( VDD, vout, false));
-
-
-        // //It will be very low freq wave
         
         vTaskDelay(pdMS_TO_TICKS(200));
         res = xQueueReceive(pcnt_evt_queue, &evt, 100 / portTICK_PERIOD_MS);
@@ -377,8 +361,6 @@ void mcp4725_task(void *pvParameters)
             count = 0;
         }
 
-        // ESP_ERROR_CHECK(mcp4725_get_voltage( VDD, false, &vout_read)); // get val sai, nhưng set val đúng
-        // printf("Vout read: %.02f\n", vout_read);
 
     }
 }
@@ -394,16 +376,8 @@ static esp_adc_cal_characteristics_t *adc_chars_vref2048;
 
 static const adc_bits_width_t width = ADC_WIDTH_BIT_12;
 
-
-// static const adc_channel_t adc_2048_channel = ADC_CHANNEL_7;     //GPIO34 if ADC1, GPIO14 if ADC2
-// static const adc_atten_t adc_2048_atten = ADC_ATTEN_DB_11;
-
 static const adc_channel_t adc_pH_channel = ADC_CHANNEL_4;     //GPIO34 if ADC1, GPIO14 if ADC2
 static const adc_atten_t adc_pH_atten = ADC_ATTEN_DB_2_5;
-
-// static const adc_channel_t adc_vref_pH_channel = ADC_CHANNEL_5;     //GPIO34 if ADC1, GPIO14 if ADC2
-// static const adc_atten_t adc_vref_pH_atten = ADC_ATTEN_DB_6;
-
 
 static void check_efuse(void)
 {
@@ -585,19 +559,10 @@ void adc_task(void *pvParameters)
 
     //Characterize ADC
     adc_chars_pH       = calloc(1, sizeof(esp_adc_cal_characteristics_t));
-    // adc_chars_pH_vref  = calloc(1, sizeof(esp_adc_cal_characteristics_t));
-    // adc_chars_vref2048 = calloc(1, sizeof(esp_adc_cal_characteristics_t));
-
     esp_adc_cal_value_t val_type_pH = esp_adc_cal_characterize(ADC_UNIT_1, adc_pH_atten, width, DEFAULT_VREF, adc_chars_pH);
     print_char_val_type(val_type_pH);
     adc1_config_channel_atten(adc_pH_channel, adc_pH_atten);
-    // esp_adc_cal_value_t val_type_pH_vref = esp_adc_cal_characterize(ADC_UNIT_1, adc_vref_pH_atten, width, DEFAULT_VREF, adc_chars_pH_vref);
-    // print_char_val_type(val_type_pH_vref);
 
-    // esp_adc_cal_value_t val_type_vref2048 = esp_adc_cal_characterize(ADC_UNIT_1, adc_2048_atten, width, DEFAULT_VREF, adc_chars_vref2048);
-    // print_char_val_type(val_type_vref2048);
-
-    //Continuously sample ADC1
     while (1)
     {
 
