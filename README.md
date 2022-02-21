@@ -15,4 +15,4 @@
 [https://www.youtube.com/watch?v=02jUBLduDkY&ab_channel=Ti%E1%BA%BFnTh%E1%BB%8BnhChu](https://www.youtube.com/watch?v=02jUBLduDkY&ab_channel=Ti%E1%BA%BFnTh%E1%BB%8BnhChu)
 
 - donate me at BTC address: bc1qtktg3ece5ffrfchslskayuc6nwlyqhgamfvdkz
-s
+
